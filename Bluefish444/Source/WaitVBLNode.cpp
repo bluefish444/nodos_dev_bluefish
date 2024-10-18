@@ -41,10 +41,14 @@ struct WaitVBLNodeContext : nos::NodeContext
 		auto prev = FieldCount;
 		device->WaitVBI(channel, FieldCount);
 		auto diff = FieldCount - prev;
-		uint8_t isInterlaced = bfcUtilsIsVideoModeProgressive(videoMode);
-		if (diff > (1 + isInterlaced))
+		//uint8_t isInterlaced = bfcUtilsIsVideoModeProgressive(videoMode);
+		//if (diff > (1 + isInterlaced))
+		//{
+		//	nosEngine.LogW("%s dropped %d frames", bfcUtilsGetStringForVideoChannel(channel), diff / (1 + isInterlaced));
+		//}
+		if (diff > 2)
 		{
-			nosEngine.LogW("%s dropped %d frames", bfcUtilsGetStringForVideoChannel(channel), diff / (1 + isInterlaced));
+			nosEngine.LogW("%s dropped %d frames", bfcUtilsGetStringForVideoChannel(channel), (diff - 2) / 2);
 		}
 		return NOS_RESULT_SUCCESS;
 	}

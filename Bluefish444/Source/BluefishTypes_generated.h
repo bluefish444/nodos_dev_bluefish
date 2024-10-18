@@ -279,6 +279,7 @@ struct TChannelInfo : public ::flatbuffers::NativeTable {
   std::string video_mode_name{};
   int32_t video_mode = 0;
   std::unique_ptr<nos::fb::vec2u> resolution{};
+  bool interlaced = false;
   TChannelInfo() = default;
   TChannelInfo(const TChannelInfo &o);
   TChannelInfo(TChannelInfo&&) FLATBUFFERS_NOEXCEPT = default;
@@ -300,7 +301,8 @@ struct ChannelInfo FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
     VT_CHANNEL = 6,
     VT_VIDEO_MODE_NAME = 8,
     VT_VIDEO_MODE = 10,
-    VT_RESOLUTION = 12
+    VT_RESOLUTION = 12,
+    VT_INTERLACED = 14
   };
   const nos::bluefish::DeviceId *device() const {
     return GetPointer<const nos::bluefish::DeviceId *>(VT_DEVICE);
@@ -332,6 +334,12 @@ struct ChannelInfo FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   nos::fb::vec2u *mutable_resolution() {
     return GetStruct<nos::fb::vec2u *>(VT_RESOLUTION);
   }
+  bool interlaced() const {
+    return GetField<uint8_t>(VT_INTERLACED, 0) != 0;
+  }
+  bool mutate_interlaced(bool _interlaced = 0) {
+    return SetField<uint8_t>(VT_INTERLACED, static_cast<uint8_t>(_interlaced), 0);
+  }
   template<size_t Index>
   auto get_field() const {
          if constexpr (Index == 0) return device();
@@ -339,6 +347,7 @@ struct ChannelInfo FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
     else if constexpr (Index == 2) return video_mode_name();
     else if constexpr (Index == 3) return video_mode();
     else if constexpr (Index == 4) return resolution();
+    else if constexpr (Index == 5) return interlaced();
     else static_assert(Index != Index, "Invalid Field Index");
   }
   bool Verify(::flatbuffers::Verifier &verifier) const {
@@ -351,6 +360,7 @@ struct ChannelInfo FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
            verifier.VerifyString(video_mode_name()) &&
            VerifyField<int32_t>(verifier, VT_VIDEO_MODE, 4) &&
            VerifyField<nos::fb::vec2u>(verifier, VT_RESOLUTION, 4) &&
+           VerifyField<uint8_t>(verifier, VT_INTERLACED, 1) &&
            verifier.EndTable();
   }
   TChannelInfo *UnPack(const ::flatbuffers::resolver_function_t *_resolver = nullptr) const;
@@ -377,6 +387,9 @@ struct ChannelInfoBuilder {
   void add_resolution(const nos::fb::vec2u *resolution) {
     fbb_.AddStruct(ChannelInfo::VT_RESOLUTION, resolution);
   }
+  void add_interlaced(bool interlaced) {
+    fbb_.AddElement<uint8_t>(ChannelInfo::VT_INTERLACED, static_cast<uint8_t>(interlaced), 0);
+  }
   explicit ChannelInfoBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
@@ -394,13 +407,15 @@ inline ::flatbuffers::Offset<ChannelInfo> CreateChannelInfo(
     ::flatbuffers::Offset<nos::bluefish::ChannelId> channel = 0,
     ::flatbuffers::Offset<::flatbuffers::String> video_mode_name = 0,
     int32_t video_mode = 0,
-    const nos::fb::vec2u *resolution = nullptr) {
+    const nos::fb::vec2u *resolution = nullptr,
+    bool interlaced = false) {
   ChannelInfoBuilder builder_(_fbb);
   builder_.add_resolution(resolution);
   builder_.add_video_mode(video_mode);
   builder_.add_video_mode_name(video_mode_name);
   builder_.add_channel(channel);
   builder_.add_device(device);
+  builder_.add_interlaced(interlaced);
   return builder_.Finish();
 }
 
@@ -409,13 +424,14 @@ struct ChannelInfo::Traits {
   static auto constexpr Create = CreateChannelInfo;
   static constexpr auto name = "ChannelInfo";
   static constexpr auto fully_qualified_name = "nos.bluefish.ChannelInfo";
-  static constexpr size_t fields_number = 5;
+  static constexpr size_t fields_number = 6;
   static constexpr std::array<const char *, fields_number> field_names = {
     "device",
     "channel",
     "video_mode_name",
     "video_mode",
-    "resolution"
+    "resolution",
+    "interlaced"
   };
   template<size_t Index>
   using FieldType = decltype(std::declval<type>().get_field<Index>());
@@ -427,7 +443,8 @@ inline ::flatbuffers::Offset<ChannelInfo> CreateChannelInfoDirect(
     ::flatbuffers::Offset<nos::bluefish::ChannelId> channel = 0,
     const char *video_mode_name = nullptr,
     int32_t video_mode = 0,
-    const nos::fb::vec2u *resolution = nullptr) {
+    const nos::fb::vec2u *resolution = nullptr,
+    bool interlaced = false) {
   auto video_mode_name__ = video_mode_name ? _fbb.CreateString(video_mode_name) : 0;
   return nos::bluefish::CreateChannelInfo(
       _fbb,
@@ -435,7 +452,8 @@ inline ::flatbuffers::Offset<ChannelInfo> CreateChannelInfoDirect(
       channel,
       video_mode_name__,
       video_mode,
-      resolution);
+      resolution,
+      interlaced);
 }
 
 ::flatbuffers::Offset<ChannelInfo> CreateChannelInfo(::flatbuffers::FlatBufferBuilder &_fbb, const TChannelInfo *_o, const ::flatbuffers::rehasher_function_t *_rehasher = nullptr);
@@ -529,7 +547,8 @@ inline bool operator==(const TChannelInfo &lhs, const TChannelInfo &rhs) {
       ((lhs.channel == rhs.channel) || (lhs.channel && rhs.channel && *lhs.channel == *rhs.channel)) &&
       (lhs.video_mode_name == rhs.video_mode_name) &&
       (lhs.video_mode == rhs.video_mode) &&
-      ((lhs.resolution == rhs.resolution) || (lhs.resolution && rhs.resolution && *lhs.resolution == *rhs.resolution));
+      ((lhs.resolution == rhs.resolution) || (lhs.resolution && rhs.resolution && *lhs.resolution == *rhs.resolution)) &&
+      (lhs.interlaced == rhs.interlaced);
 }
 
 inline bool operator!=(const TChannelInfo &lhs, const TChannelInfo &rhs) {
@@ -542,7 +561,8 @@ inline TChannelInfo::TChannelInfo(const TChannelInfo &o)
         channel((o.channel) ? new nos::bluefish::TChannelId(*o.channel) : nullptr),
         video_mode_name(o.video_mode_name),
         video_mode(o.video_mode),
-        resolution((o.resolution) ? new nos::fb::vec2u(*o.resolution) : nullptr) {
+        resolution((o.resolution) ? new nos::fb::vec2u(*o.resolution) : nullptr),
+        interlaced(o.interlaced) {
 }
 
 inline TChannelInfo &TChannelInfo::operator=(TChannelInfo o) FLATBUFFERS_NOEXCEPT {
@@ -551,6 +571,7 @@ inline TChannelInfo &TChannelInfo::operator=(TChannelInfo o) FLATBUFFERS_NOEXCEP
   std::swap(video_mode_name, o.video_mode_name);
   std::swap(video_mode, o.video_mode);
   std::swap(resolution, o.resolution);
+  std::swap(interlaced, o.interlaced);
   return *this;
 }
 
@@ -568,6 +589,7 @@ inline void ChannelInfo::UnPackTo(TChannelInfo *_o, const ::flatbuffers::resolve
   { auto _e = video_mode_name(); if (_e) _o->video_mode_name = _e->str(); }
   { auto _e = video_mode(); _o->video_mode = _e; }
   { auto _e = resolution(); if (_e) _o->resolution = std::unique_ptr<nos::fb::vec2u>(new nos::fb::vec2u(*_e)); }
+  { auto _e = interlaced(); _o->interlaced = _e; }
 }
 
 inline ::flatbuffers::Offset<ChannelInfo> ChannelInfo::Pack(::flatbuffers::FlatBufferBuilder &_fbb, const TChannelInfo* _o, const ::flatbuffers::rehasher_function_t *_rehasher) {
@@ -583,13 +605,15 @@ inline ::flatbuffers::Offset<ChannelInfo> CreateChannelInfo(::flatbuffers::FlatB
   auto _video_mode_name = _o->video_mode_name.empty() ? 0 : _fbb.CreateString(_o->video_mode_name);
   auto _video_mode = _o->video_mode;
   auto _resolution = _o->resolution ? _o->resolution.get() : nullptr;
+  auto _interlaced = _o->interlaced;
   return nos::bluefish::CreateChannelInfo(
       _fbb,
       _device,
       _channel,
       _video_mode_name,
       _video_mode,
-      _resolution);
+      _resolution,
+      _interlaced);
 }
 
 inline const ::flatbuffers::TypeTable *DeviceIdTypeTable() {
@@ -628,7 +652,8 @@ inline const ::flatbuffers::TypeTable *ChannelInfoTypeTable() {
     { ::flatbuffers::ET_SEQUENCE, 0, 1 },
     { ::flatbuffers::ET_STRING, 0, -1 },
     { ::flatbuffers::ET_INT, 0, -1 },
-    { ::flatbuffers::ET_SEQUENCE, 0, 2 }
+    { ::flatbuffers::ET_SEQUENCE, 0, 2 },
+    { ::flatbuffers::ET_BOOL, 0, -1 }
   };
   static const ::flatbuffers::TypeFunction type_refs[] = {
     nos::bluefish::DeviceIdTypeTable,
@@ -640,10 +665,11 @@ inline const ::flatbuffers::TypeTable *ChannelInfoTypeTable() {
     "channel",
     "video_mode_name",
     "video_mode",
-    "resolution"
+    "resolution",
+    "interlaced"
   };
   static const ::flatbuffers::TypeTable tt = {
-    ::flatbuffers::ST_TABLE, 5, type_codes, type_refs, nullptr, nullptr, names
+    ::flatbuffers::ST_TABLE, 6, type_codes, type_refs, nullptr, nullptr, names
   };
   return &tt;
 }

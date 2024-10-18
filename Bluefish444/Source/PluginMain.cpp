@@ -7,7 +7,7 @@
 
 #define IMPLEMENTATION_BLUEVELVETC_FUNC_PTR
 #define LOAD_FUNC_PTR_V6_5_3
-#include <BlueVelvetCFuncPtr.h>
+#include <BlueSDKHeader\BlueVelvetCFuncPtr.h>
 
 NOS_INIT()
 NOS_VULKAN_INIT()

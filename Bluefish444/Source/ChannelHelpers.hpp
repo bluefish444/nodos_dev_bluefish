@@ -27,6 +27,72 @@ struct FormatDescriptor
 	u8 Interlaced : 1;
 };
 
+inline EBlueVideoChannel inputIdxToChannel(unsigned int nIndex)
+{
+	EBlueVideoChannel inputChannel = BLUE_VIDEOCHANNEL_INVALID;
+	switch (nIndex)
+	{
+	case 1:
+		inputChannel = BLUE_VIDEO_INPUT_CHANNEL_A;
+		break;
+	case 2:
+		inputChannel = BLUE_VIDEO_INPUT_CHANNEL_B;
+		break;
+	case 3:
+		inputChannel = BLUE_VIDEO_INPUT_CHANNEL_C;
+		break;
+	case 4:
+		inputChannel = BLUE_VIDEO_INPUT_CHANNEL_D;
+		break;
+	case 5:
+		inputChannel = BLUE_VIDEO_INPUT_CHANNEL_E;
+		break;
+	case 6:
+		inputChannel = BLUE_VIDEO_INPUT_CHANNEL_F;
+		break;
+	case 7:
+		inputChannel = BLUE_VIDEO_INPUT_CHANNEL_G;
+		break;
+	case 8:
+		inputChannel = BLUE_VIDEO_INPUT_CHANNEL_H;
+		break;
+	}
+	return inputChannel;
+}
+
+inline EBlueVideoChannel outputIdxToChannel(unsigned int nIndex)
+{
+	EBlueVideoChannel outputChannel = BLUE_VIDEOCHANNEL_INVALID;
+	switch (nIndex)
+	{
+	case 1:
+		outputChannel = BLUE_VIDEO_OUTPUT_CHANNEL_A;
+		break;
+	case 2:
+		outputChannel = BLUE_VIDEO_OUTPUT_CHANNEL_B;
+		break;
+	case 3:
+		outputChannel = BLUE_VIDEO_OUTPUT_CHANNEL_C;
+		break;
+	case 4:
+		outputChannel = BLUE_VIDEO_OUTPUT_CHANNEL_D;
+		break;
+	case 5:
+		outputChannel = BLUE_VIDEO_OUTPUT_CHANNEL_E;
+		break;
+	case 6:
+		outputChannel = BLUE_VIDEO_OUTPUT_CHANNEL_F;
+		break;
+	case 7:
+		outputChannel = BLUE_VIDEO_OUTPUT_CHANNEL_G;
+		break;
+	case 8:
+		outputChannel = BLUE_VIDEO_OUTPUT_CHANNEL_H;
+		break;
+	}
+	return outputChannel;
+}
+
 inline nos::fb::vec2u UnpackU64(uint64_t val)
 {
 	return nos::fb::vec2u((val >> 32) & 0xFFFFFFFF, val & 0xFFFFFFFF);
@@ -72,13 +138,17 @@ inline auto EnumerateFormats()
 
 inline void EnumerateInputChannels(flatbuffers::FlatBufferBuilder& fbb, std::vector<flatbuffers::Offset<nos::ContextMenuItem>>& devices)
 {
+	BLUE_S32 nDeviceCou = bfcUtilsGetDeviceCount();
+	blue_device_info BfDeviceInfo;
+	std::vector<flatbuffers::Offset<nos::ContextMenuItem>> inChannels;
+
 	BluefishDevice::ForEachDevice([&](BluefishDevice& device) {
-		std::vector<flatbuffers::Offset<nos::ContextMenuItem>> inChannels;
-		for (EBlueVideoChannel ch = BLUE_VIDEO_OUTPUT_CHANNEL_1; ch < BLUE_VIDEO_INPUT_CHANNEL_8;
-		     ch = static_cast<EBlueVideoChannel>(static_cast<int>(ch) + 1))
+		BErr bErr = bfcUtilsGetDeviceInfo(device.GetId(), &BfDeviceInfo);
+		for (unsigned int chIndex = 1; chIndex <= BfDeviceInfo.SdiConnectorCountInput; chIndex++)
 		{
-			if (!IsInputChannel(ch))
-				continue;
+			EBlueVideoChannel ch = inputIdxToChannel(chIndex);
+			//if (!IsInputChannel(ch))
+			//	continue;
 			SelectChannelCommand command = {
 				.DeviceId = device.GetId(),
 				.Channel = ch
@@ -88,23 +158,40 @@ inline void EnumerateInputChannels(flatbuffers::FlatBufferBuilder& fbb, std::vec
 			if (device.CanChannelDoInput(ch))
 				inChannels.push_back(nos::CreateContextMenuItemDirect(fbb, channelName.c_str(), command));
 			if (!inChannels.empty())
-				devices.push_back(nos::CreateContextMenuItemDirect(fbb, "Input", 0, &inChannels));
+			{
+				if (nDeviceCou > 1)
+				{
+					std::string strCard = "Card " + std::to_string(device.GetId()) + " Input";
+					devices.push_back(nos::CreateContextMenuItemDirect(fbb, strCard.data(), 0, &inChannels));
+				}
+				else
+				{
+					devices.push_back(nos::CreateContextMenuItemDirect(fbb, "Input", 0, &inChannels));
+				}
+			}
 		}
 	});
 }
 
 inline void EnumerateOutputChannels(flatbuffers::FlatBufferBuilder& fbb, std::vector<flatbuffers::Offset<nos::ContextMenuItem>>& devices)
 {
+	BLUE_S32 nDeviceCou = bfcUtilsGetDeviceCount();
+	blue_device_info BfDeviceInfo;
+	std::vector<flatbuffers::Offset<nos::ContextMenuItem>> outChannels;
+
 	BluefishDevice::ForEachDevice([&](BluefishDevice& device) {
-		std::vector<flatbuffers::Offset<nos::ContextMenuItem>> outChannels;
-		for (EBlueVideoChannel ch = BLUE_VIDEO_OUTPUT_CHANNEL_1; ch < BLUE_VIDEO_INPUT_CHANNEL_8; ch = static_cast<EBlueVideoChannel>(static_cast<int>(ch) + 1))
+		BErr bErr = bfcUtilsGetDeviceInfo(device.GetId(), &BfDeviceInfo);
+
+//		std::vector<flatbuffers::Offset<nos::ContextMenuItem>> outChannels;
+		for (unsigned int chIndex = 1; chIndex <= BfDeviceInfo.SdiConnectorCountOutput; chIndex++)
 		{
+			EBlueVideoChannel ch = outputIdxToChannel(chIndex);
 			SelectChannelCommand command = {
 				.DeviceId = device.GetId(),
 				.Channel = ch
 			};
-			if (IsInputChannel(ch))
-				continue;
+			//if (IsInputChannel(ch))
+			//	continue;
 			std::string channelName = bfcUtilsGetStringForVideoChannel(ch);
 			ReplaceString(channelName, "Output ", "");
 			std::vector<flatbuffers::Offset<nos::ContextMenuItem>> extents;
@@ -141,8 +228,20 @@ inline void EnumerateOutputChannels(flatbuffers::FlatBufferBuilder& fbb, std::ve
 			if (!extents.empty())
 				outChannels.push_back(nos::CreateContextMenuItemDirect(fbb, channelName.c_str(), 0, &extents));
 		}
-		if (!outChannels.empty())
-			devices.push_back(nos::CreateContextMenuItemDirect(fbb, "Output", 0, &outChannels));
+
+		if (nDeviceCou > 1)
+		{
+			if (!outChannels.empty())
+			{
+				std::string strCard = "Card " + std::to_string(device.GetId()) + " Output";
+				devices.push_back(nos::CreateContextMenuItemDirect(fbb, strCard.data(), 0, &outChannels));
+			}
+		}
+		else
+		{
+			if (!outChannels.empty())
+				devices.push_back(nos::CreateContextMenuItemDirect(fbb, "Output", 0, &outChannels));
+		}
 	});
 }
 

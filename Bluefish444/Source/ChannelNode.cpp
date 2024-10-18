@@ -101,6 +101,10 @@ void ChannelNode::OnMenuCommand(nosUUID itemID, uint32_t cmd)
 	scan_mode scanMode;
 	auto err = bfcUtilsGetFrameInfoForVideoModeExtV2(command.VideoMode, &width, &height, &frameRate, &frameRateIs1001, &scanMode);
 	channelPin.resolution = std::make_unique<nos::fb::vec2u>(width, height);
+	if (bfcUtilsIsVideoModeProgressive(command.VideoMode) || bfcUtilsIsVideoModePsF(command.VideoMode))
+		channelPin.interlaced = false;
+	else
+		channelPin.interlaced = true;
 	nosEngine.SetPinValue(ChannelPinId, nos::Buffer::From(channelPin));
 	UpdateChannel(std::move(channelPin));
 }
@@ -146,14 +150,24 @@ void ChannelNode::OpenChannel()
 	auto channel = static_cast<EBlueVideoChannel>(ChannelInfo.channel->id);
 	std::string channelStr = bfcUtilsGetStringForVideoChannel(channel);
 	std::string modeStr = bfcUtilsGetStringForVideoMode(mode);
+	blue_setup_info setupInfo;
 	if (IsInputChannel(channel))
+	{
 		nosEngine.LogI("Route input %s", channelStr.c_str());
+		setupInfo = bfcUtilsGetDefaultSetupInfoInput(channel);
+	}
 	else
+	{
 		nosEngine.LogI("Route output %s with video mode %s", channelStr.c_str(), modeStr.c_str());
+		setupInfo = bfcUtilsGetDefaultSetupInfoOutput(channel, mode);
+	}
 
-	auto err = device->OpenChannel(channel, mode);
+	auto err = device->OpenChannel(channel, setupInfo);
 	if (BERR_NO_ERROR == err)
+	{
+		modeStr = bfcUtilsGetStringForVideoMode(setupInfo.VideoModeExt);
 		UpdateStatus(nos::fb::NodeStatusMessageType::INFO, channelStr + " " + modeStr);
+	}
 	else
 	{
 		UpdateStatus(nos::fb::NodeStatusMessageType::FAILURE, "Unable to open channel " + channelStr + ": " + bfcUtilsGetStringForBErr(err));

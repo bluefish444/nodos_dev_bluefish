@@ -37,6 +37,12 @@
           "type_name": "nos.sys.vulkan.Buffer",
           "show_as": "INPUT_PIN",
           "can_show_as": "INPUT_PIN_ONLY"
+        },
+        {
+          "name": "PixelFormat",
+          "type_name": "nos.MediaIO.YCbCrPixelFormat",
+          "show_as": "INPUT_PIN",
+          "can_show_as": "INPUT_PIN_OR_PROPERTY"
         }
       ]
     },
@@ -76,6 +82,12 @@
           "type_name": "nos.sys.vulkan.Buffer",
           "show_as": "OUTPUT_PIN",
           "can_show_as": "OUTPUT_PIN_ONLY"
+        },
+        {
+          "name": "PixelFormat",
+          "type_name": "nos.MediaIO.YCbCrPixelFormat",
+          "show_as": "INPUT_PIN",
+          "can_show_as": "INPUT_PIN_OR_PROPERTY"
         }
       ]
     },

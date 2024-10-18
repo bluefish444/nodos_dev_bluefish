@@ -12,8 +12,8 @@
 #endif
 
 #define LOAD_FUNC_PTR_V6_5_3
-#include <BlueVelvetCFuncPtr.h>
-#include <BlueVelvetCExternHelper.h>
+#include <BlueSDKHeader\BlueVelvetCFuncPtr.h>
+#include <BlueSDKHeader\BlueVelvetCExternHelper.h>
 
 // stl
 #include <unordered_map>
@@ -53,14 +53,16 @@ public:
 
 	bool CanChannelDoInput(EBlueVideoChannel channel);
 	blue_setup_info GetSetupInfoForInput(EBlueVideoChannel channel, BErr& err) const;
+	bool SetupChannel(EBlueVideoChannel channel, EMemoryFormat pixelFormat);
+	bool ChannelExist(EBlueVideoChannel channel);
 
 	// Called from Nodos Task Manager Thread
-    BErr OpenChannel(EBlueVideoChannel channel, EVideoModeExt mode);
+	BErr OpenChannel(EBlueVideoChannel channel, blue_setup_info& setupInfo);
 	void CloseChannel(EBlueVideoChannel channel);
 
 	// Called from user-created threads (DMA Thread node in In/Out graphs)
-	bool DMAWriteFrame(EBlueVideoChannel channel, uint32_t bufferId, uint8_t* inBuffer, uint32_t size) const;
-	bool DMAReadFrame(EBlueVideoChannel channel, uint32_t nextCaptureBufferId, uint32_t readBufferId, uint8_t* outBuffer, uint32_t size) const;
+	bool DMAWriteFrame(EBlueVideoChannel channel, uint32_t bufferId, uint8_t* inBuffer, uint32_t size, uint32_t fieldCount) const;
+	bool DMAReadFrame(EBlueVideoChannel channel, uint32_t nextCaptureBufferId, uint32_t readBufferId, uint8_t* outBuffer, uint32_t size, uint32_t* fieldCount) const;
 	bool WaitVBI(EBlueVideoChannel channel, unsigned long& fieldCount) const;
 	std::array<uint32_t, 2> GetDeltaSeconds(EBlueVideoChannel channel) const;
 	
@@ -81,14 +83,16 @@ private:
 class Channel
 {
 public:
-	Channel(BluefishDevice* device, EBlueVideoChannel channel, EVideoModeExt mode, BErr& err);
+	//Channel(BluefishDevice* device, EBlueVideoChannel channel, EVideoModeExt mode, EMemoryFormat ePixelFormat, BErr& err);
+	Channel(BluefishDevice* device, EBlueVideoChannel channel, blue_setup_info& bfSetup, BErr& err);
 	~Channel();
 
 	Channel(Channel const&) = delete;
-	
+	blue_setup_info GetSetupInfo() const;
+
 	// Called from DMA threads
-	bool DMAWriteFrame(uint32_t bufferId, uint8_t* inBuffer, uint32_t size);
-	bool DMAReadFrame(uint32_t nextCaptureBufferId, uint32_t readBufferId, uint8_t* outBuffer, uint32_t size);
+	bool DMAWriteFrame(uint32_t bufferId, uint8_t* inBuffer, uint32_t size, uint32_t fieldCount);
+	bool DMAReadFrame(uint32_t nextCaptureBufferId, uint32_t readBufferId, uint8_t* outBuffer, uint32_t size, uint32_t* fieldCount);
 	bool WaitVBI(unsigned long& fieldCount) const;
 	std::array<uint32_t, 2> GetDeltaSeconds() const { return DeltaSeconds; }
 	
@@ -96,7 +100,11 @@ protected:
 	BluefishDevice* Device;
 	EBlueVideoChannel VideoChannel;
 	SdkInstance Instance;
+	//EVideoModeExt videoMode;
+	blue_setup_info setupInfo;
 	std::array<uint32_t, 2> DeltaSeconds{};
+	unsigned long UnderrunLast;
+	BLUE_U32 FramesDMAed;
 };
 
 inline void ReplaceString(std::string &str, const std::string &toReplace, const std::string &replacement) {

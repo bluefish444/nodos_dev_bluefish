@@ -18,4 +18,5 @@ table ChannelInfo {
     video_mode_name: string;
     video_mode: int;
     resolution: nos.fb.vec2u;
+    interlaced: bool;
 }

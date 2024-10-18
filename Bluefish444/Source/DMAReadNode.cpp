@@ -19,6 +19,27 @@ struct DMAReadNodeContext : DMANodeBase
 		});
 	}
 
+	uint32_t nosPixelFormat = 0; //YCbCrPixelFormat
+
+	void OnPinValueChanged(nos::Name pinName, nosUUID pinId, nosBuffer value) override
+	{
+		if (pinName == NOS_NAME("Channel"))
+		{
+		}
+		else if (pinName == NOS_NAME("PixelFormat"))
+		{
+			int nValue = 0;
+			if (value.Size > 0)
+			{
+				nValue = *((int*)(value.Data));
+				if (nosPixelFormat != nValue)
+				{
+					nosPixelFormat = nValue;
+				}
+			}
+		}
+	}
+
 	nosResult ExecuteNode(nosNodeExecuteParams* params) override
 	{
 		nos::bluefish::ChannelInfo* channelInfo = nullptr;
@@ -34,6 +55,12 @@ struct DMAReadNodeContext : DMANodeBase
 				outputBuffer = nos::vkss::ConvertToResourceInfo(*nos::InterpretPinValue<nos::sys::vulkan::Buffer>(*pin.Data));
 				outputBufferId = pin.Id;
 			}
+			else if (pin.Name == NOS_NAME("PixelFormat"))
+			{
+				uint32_t* pValue;
+				pValue = nos::InterpretPinValue<uint32_t>(*pin.Data);
+				nosPixelFormat = *pValue;
+			}
 		}
  
 		if (!channelInfo->device() || !channelInfo->channel())
@@ -45,32 +72,78 @@ struct DMAReadNodeContext : DMANodeBase
 		auto channel = static_cast<EBlueVideoChannel>(channelInfo->channel()->id());
 		auto videoMode = static_cast<EVideoModeExt>(channelInfo->video_mode());
 
-		uint32_t width, height;
-		bfcGetVideoWidth(videoMode, &width);
-		bfcGetVideoHeight(videoMode, UPD_FMT_FRAME, &height);
-		
-		nosVec2u ycbcrSize(width >> 1, height);
-		uint32_t bufferSize = ycbcrSize.x * ycbcrSize.y * 4;
+		if (!device->ChannelExist(channel))
+			return NOS_RESULT_NOT_FOUND;
 
-		if (!outputBuffer.Memory.Handle || outputBuffer.Info.Buffer.Size != bufferSize)
+		//if (1)
+		//{
+			if (nosPixelFormat == 1)
+				device->SetupChannel(channel, MEM_FMT_V210);
+			else
+				device->SetupChannel(channel, MEM_FMT_2VUY);
+		//}
+		//else
+		//	device->SetupChannel(channel, MEM_FMT_RGBA_16_16_16_16);
+
+		//uint32_t width, height;
+		//bfcGetVideoWidth(videoMode, &width);
+		//bfcGetVideoHeight(videoMode, UPD_FMT_FRAME, &height);
+		//
+		//nosVec2u ycbcrSize(width >> 1, height);
+		//uint32_t bufferSize = ycbcrSize.x * ycbcrSize.y * 4;
+
+		if (!outputBuffer.Memory.Handle/* || outputBuffer.Info.Buffer.Size != bufferSize*/)
 			return NOS_RESULT_FAILED;
 		 
 		std::string channelStr = bfcUtilsGetStringForVideoChannel(channel);
 
 		auto buffer = nosVulkan->Map(&outputBuffer);
+		if (!buffer)
+			return NOS_RESULT_OUT_OF_MEMORY;
 		if((uintptr_t)buffer % 64 != 0)
 			nosEngine.LogE("DMA write only accepts buffers addresses to be aligned to 64 bytes"); // TODO: Check device. This is only in Khronos range!
 
+		uint32_t fieldCount = 0;
 		auto startCaptureBufferId = (BufferId + 2) % CycledBuffersPerChannel; // +2: Buffer will be available after two VBIs.
 		{
 			nos::util::Stopwatch sw;
-			device->DMAReadFrame(channel, startCaptureBufferId, BufferId, buffer, outputBuffer.Info.Buffer.Size);
+			if (!device->DMAReadFrame(channel, startCaptureBufferId, BufferId, buffer, outputBuffer.Info.Buffer.Size, &fieldCount))
+			{
+				BErr err{};
+				blue_setup_info setupInfo = device->GetSetupInfoForInput(channel, err);
+
+				//if (1)
+				//{
+					if (nosPixelFormat == 1)
+						setupInfo.MemoryFormat = MEM_FMT_V210;
+					else
+						setupInfo.MemoryFormat = MEM_FMT_2VUY;
+				//}
+				//else
+				//{
+				//	setupInfo.MemoryFormat = MEM_FMT_RGBA_16_16_16_16;
+				//}
+
+				device->CloseChannel(channel);
+				device->OpenChannel(channel, setupInfo);
+
+				//Need add resolution child pin in this node to replace the one in Channel node, and update the pin here.
+				return NOS_RESULT_FAILED;
+			}
 			auto elapsed = sw.Elapsed();
 			nosEngine.WatchLog(("Bluefish " + channelStr + " DMA Read").c_str(), nos::util::Stopwatch::ElapsedString(elapsed).c_str());
 		}
 		BufferId = (BufferId + 1) % CycledBuffersPerChannel;
 
-		outputBuffer.Info.Buffer.FieldType = NOS_TEXTURE_FIELD_TYPE_PROGRESSIVE; // TODO: Interlaced support
+		if (bfcUtilsIsVideoModeProgressive(videoMode) || bfcUtilsIsVideoModePsF(videoMode))
+			outputBuffer.Info.Buffer.FieldType = NOS_TEXTURE_FIELD_TYPE_PROGRESSIVE;
+		else
+		{
+			if (fieldCount % 2 == 0)
+				outputBuffer.Info.Buffer.FieldType = NOS_TEXTURE_FIELD_TYPE_EVEN;
+			else
+				outputBuffer.Info.Buffer.FieldType = NOS_TEXTURE_FIELD_TYPE_ODD;
+		}
 
 		nosEngine.SetPinValue(outputBufferId, nos::Buffer::From(nos::vkss::ConvertBufferInfo(outputBuffer)));
 
